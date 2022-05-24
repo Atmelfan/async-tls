@@ -22,6 +22,27 @@ pub struct TlsStream<IO> {
     pub(crate) state: TlsState,
 }
 
+impl<IO> TlsStream<IO>
+where
+    IO: AsyncRead + AsyncWrite + Unpin,
+{
+    async fn shutdown_tls(&mut self) -> Result<()> {
+        // Send a close notify
+        if self.state.writeable() {
+            self.session.send_close_notify();
+            ready!(stream.complete_io(cx))?;
+        }
+
+        // Drop all data until a close_notify has been received
+        let sink = sink();
+        match copy(self, sink) {
+            Err(ref err) if err.kind() == io::ErrorKind::ConnectionAborted => Ok(()),
+            Err(err) => Err(err),
+            Ok(n) => unreachable!()
+        }
+    }
+}
+
 pub(crate) enum MidHandshake<IO> {
     Handshaking(TlsStream<IO>),
     End,
